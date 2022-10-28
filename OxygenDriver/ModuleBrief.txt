@@ -1,0 +1,5 @@
+this module contains with those func:
+1.Force read/write
+2.Use NtAlloc Mem and Use NtProtect change property of mem page
+3.Use NtCreateThread create a remote thread
+4.all func changes _KThread.PrevisouMode to 0,so that it can ignore privilige check.

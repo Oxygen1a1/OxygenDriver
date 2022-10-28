@@ -1,0 +1,11 @@
+﻿  Building 'OxygenDriver' with toolset 'WindowsKernelModeDriver10.0' and the 'Desktop' target platform.
+  DriverInit.cpp
+  Global.cpp
+  ReadWrite.cpp
+  正在生成代码...
+  OxygenDriver.vcxproj -> C:\Users\Administrator\Desktop\正在写的项目\OxygenDriver\x64\Release\OxygenDriver.sys
+  Done Adding Additional Store
+  Successfully signed: C:\Users\Administrator\Desktop\\OxygenDriver\x64\Release\OxygenDriver.sys
+  
+  Inf2Cat task was skipped as there were no inf files to process
+  
