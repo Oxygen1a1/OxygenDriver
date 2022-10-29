@@ -9,6 +9,13 @@
 
 
 namespace Injector_x64 {
+
+//确定是否需要重定位
+#define RELOC_FLAG64(RelInfo) ((RelInfo >> 0x0C) == IMAGE_REL_BASED_DIR64)
+#define RELOC_FLAG RELOC_FLAG64
+
+
+
 	typedef PVOID HINSTANCE, HMODULE;
 	typedef struct _IMAGE_RUNTIME_FUNCTION_ENTRY {
 		DWORD32 BeginAddress;

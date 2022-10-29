@@ -7,6 +7,10 @@
 
 #pragma warning(disable : 4100)
 
+
+//
+
+
 UNICODE_STRING usDevname = RTL_CONSTANT_STRING(L"\\Device\\OxygenDriver");
 UNICODE_STRING usSymlink = RTL_CONSTANT_STRING(L"\\??\\OxygenDriver");
 
@@ -29,7 +33,7 @@ ULONG_PTR GetNtOskrnlBase();
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegPath) {
 	UNREFERENCED_PARAMETER(RegPath);
 
-	Injector_x64::MmInjector_x64(0,L"\\??\\C:\\Target.dll");
+	
 
 	return LoadDevAndSymLink(DriverObject);
 
@@ -100,30 +104,35 @@ NTSTATUS DispatchFuncDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 		Global::GetInstance()->uPspNotifyEnableMask = buffer->uPspNotifyEnableMaskRva+uNtosnrlBase;
 		Global::GetInstance()->uApcState = buffer->uApcState;
 		Global::GetInstance()->uApcUserPendingAll = buffer->uUserApcPendingAll;
+		Global::GetInstance()->pGetProcAddress = buffer->pGetProcAddress;
+		Global::GetInstance()->pLoadLibraryA = buffer->pLoadLibraryA;
+		Global::GetInstance()->pRtlAddFunctionTable = buffer->pRtlAddFunctionTable;
+
+		//DbgBreakPoint();
 
 		//已经初始化过
 		Global::GetInstance()->bInitPdb = 1;
 		
-		KdPrint(("Init Success!\n"));
+		KdPrint(("[OxygenDriver]info:Init Success!\n"));
 
-		KdPrint(("pNtAlloc=0x%p,pNtCreateThread=0x%p,pNtProtect=0x%p,pNtWrite=0x%p,pNtRead=0x%p,pPspEnbaleNotifyMask=0x%p,uVadRoot=0x%x,uThreadPreviouMode=0x%d\n", Global::GetInstance()->pNtAlloc, Global::GetInstance()->pNtCreateThread, Global::GetInstance()->pNtProtect, Global::GetInstance()->pNtWrite, Global::GetInstance()->pNtRead, Global::GetInstance()->uPspNotifyEnableMask, Global::GetInstance()->uVadRoot, Global::GetInstance()->uThreadPreviouMode));
+		KdPrint(("[OxygenDriver]info:pNtAlloc=0x%p,pNtCreateThread=0x%p,pNtProtect=0x%p,pNtWrite=0x%p,pNtRead=0x%p,pPspEnbaleNotifyMask=0x%p,uVadRoot=0x%x,uThreadPreviouMode=0x%d\n", Global::GetInstance()->pNtAlloc, Global::GetInstance()->pNtCreateThread, Global::GetInstance()->pNtProtect, Global::GetInstance()->pNtWrite, Global::GetInstance()->pNtRead, Global::GetInstance()->uPspNotifyEnableMask, Global::GetInstance()->uVadRoot, Global::GetInstance()->uThreadPreviouMode));
 
-		KdPrint(("uApcState=0x%x,uUserApcPending=0x%x\n", buffer->uApcState, buffer->uUserApcPendingAll));
+		KdPrint(("[OxygenDriver]info:uApcState=0x%x,uUserApcPending=0x%x\n", buffer->uApcState, buffer->uUserApcPendingAll));
 
 
 #pragma warning(disable : 4838)
 #pragma  warning(disable : 4309)
 		//读写测试
-		char* shellcode = (char*)ExAllocatePoolWithTag(NonPagedPool, 2, 'Test');
+		//char* shellcode = (char*)ExAllocatePoolWithTag(NonPagedPool, 2, 'Test');
 
-		shellcode[0] = 0x90;
-		shellcode[1] = 0x88;
+		//shellcode[0] = 0x90;
+		//shellcode[1] = 0x88;
 
-		WriteByMdl(reinterpret_cast<HANDLE>(9392), reinterpret_cast<PVOID>(0x000002214CCE0000), shellcode, 2, 0);
+		//WriteByMdl(reinterpret_cast<HANDLE>(9392), reinterpret_cast<PVOID>(0x000002214CCE0000), shellcode, 2, 0);
 
 
 
-		ExFreePool(shellcode);
+		//ExFreePool(shellcode);
 
 
 		//启动线程Test
@@ -191,9 +200,14 @@ NTSTATUS DispatchFuncDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 		//}
 
 
+		//Dll注入测试
+		Injector_x64::MmInjector_x64((HANDLE)3744, L"\\??\\C:\\Users\\Administrator\\Desktop\\InjectorTest.dll");
+
 		Irp->IoStatus.Status = STATUS_SUCCESS;
 		Irp->IoStatus.Information = sizeof(InitPdb);
 		IoCompleteRequest(Irp, IO_NO_INCREMENT);
+		
+		
 		return STATUS_SUCCESS;
 
 	}

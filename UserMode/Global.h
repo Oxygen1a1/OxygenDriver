@@ -14,5 +14,12 @@ struct InitPdb
 	ULONG_PTR uPspNotifyEnableMaskRva;
 	ULONG_PTR uApcState;
 	ULONG_PTR uUserApcPendingAll;
+
+	//Shellcode ¼ÓÔØDLl
+	ULONG_PTR pLoadLibraryA;
+	ULONG_PTR pGetProcAddress;
+
+	//x64×¨Êô
+	ULONG_PTR pRtlAddFunctionTable;
 };
 

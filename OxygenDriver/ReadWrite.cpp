@@ -6,6 +6,8 @@ using namespace ReadWrite;
 
 
 bool WriteByMdl(HANDLE ProcessId, PVOID BaseAddress, PVOID Buffer, size_t BufferLength, PULONG ReturnLength OPTIONAL);
+void OnWPbit(KIRQL irpl);
+KIRQL OffWPbit();
 
 
 void ReadWrite::ChangePreviousMode() {
@@ -20,15 +22,9 @@ void ReadWrite::ChangePreviousMode() {
 		return;
 	}
 	
-	_try{
-		ProbeForWrite((PVOID)((ULONG_PTR)pCurThread + uOffset),1,0);
-
-		*(PUCHAR)((ULONG_PTR)pCurThread + uOffset) = 0;
-
-	}_except(1) {
-
-		DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to change previousmode!\r\n");
-	}
+	
+	*(PUCHAR)((ULONG_PTR)pCurThread + uOffset) = 0;
+	
 }
 
 void ReadWrite::ResumePreviousMode() {
@@ -150,10 +146,20 @@ NTSTATUS ReadWrite::MyAllocMem(HANDLE ProcessId,PVOID* pLpAddress,INT64 ZeroBits
 	}
 
 
+
 	//附加进程 刷新一下内存 memset 让他挂一下物理页 不然没办法直接读写
+	_try{
+
 	memset(*pLpAddress, 0, *pSize);
 
-	
+	}_except(1) {
+
+		DbgPrintEx(77, 0, "[OxygenDriver]err:Flush mem err but maybe it doesn't matter\r\n");
+		
+		ResumePreviousMode();
+	}
+
+
 	KeUnstackDetachProcess(&ApcState);
 
 	ResumePreviousMode();
@@ -166,11 +172,9 @@ NTSTATUS ReadWrite::MyAllocMem(HANDLE ProcessId,PVOID* pLpAddress,INT64 ZeroBits
 	
 
 
-	DbgPrintEx(77, 0, "[OxygenDriver]:info:alloc success,alloc addr:0x%p\n", *pLpAddress);
+	DbgPrintEx(77, 0, "[OxygenDriver]info:alloc success,alloc addr:0x%p\n", *pLpAddress);
 
 
-
-	 
 	
 
 
@@ -437,10 +441,12 @@ bool WriteByMdl(HANDLE ProcessId, PVOID BaseAddress, PVOID Buffer, size_t Buffer
 	pMappedAddress = MmMapLockedPagesSpecifyCache(mdl, KernelMode, MmCached, 0, 0, NormalPagePriority);
 
 	//强写
-	KIRQL oldIrql = OffWPbit();
+	//KIRQL oldIrql = OffWPbit();
 
 	if (!MmIsAddressValid(pMappedAddress)) {
 
+
+		//OnWPbit(oldIrql);
 		KeUnstackDetachProcess(&apc_state);
 		ObDereferenceObject(pEprocess);
 		IoFreeMdl(mdl);
@@ -450,14 +456,13 @@ bool WriteByMdl(HANDLE ProcessId, PVOID BaseAddress, PVOID Buffer, size_t Buffer
 	}
 
 	__try{
-		DbgBreakPoint();
-		//ProbeForWrite(pMappedAddress,BufferLength,sizeof(ULONG));
+
 		RtlCopyMemory(pMappedAddress, Buffer, BufferLength);
 
 	}
 	__except (1) {
 
-		OnWPbit(oldIrql);
+		//OnWPbit(oldIrql);
 		KeUnstackDetachProcess(&apc_state);
 		ObDereferenceObject(pEprocess);
 		MmUnmapLockedPages(pMappedAddress, mdl);
@@ -467,7 +472,7 @@ bool WriteByMdl(HANDLE ProcessId, PVOID BaseAddress, PVOID Buffer, size_t Buffer
 
 	}
 
-	OnWPbit(oldIrql);
+	//OnWPbit(oldIrql);
 	MmUnmapLockedPages(pMappedAddress, mdl);
 	IoFreeMdl(mdl);
 	KeUnstackDetachProcess(&apc_state);

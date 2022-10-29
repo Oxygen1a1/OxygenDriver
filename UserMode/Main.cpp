@@ -14,7 +14,7 @@ int main() {
 			return 1;
 		}
 
-
+		
 		EZPDB pdb;
 		if (!EzPdbLoad(pdbPath, &pdb))
 		{
@@ -35,6 +35,10 @@ int main() {
 		Init.uThreadPreviouMode = (ULONG_PTR)EzPdbGetStructPropertyOffset(&pdb, "_KTHREAD", L"PreviousMode");
 		Init.uApcState = (ULONG_PTR)EzPdbGetStructPropertyOffset(&pdb, "_KTHREAD", L"ApcStateFill");
 		Init.uUserApcPendingAll = (ULONG_PTR)EzPdbGetStructPropertyOffset(&pdb, "_KAPC_STATE", L"UserApcPendingAll");
+		Init.pGetProcAddress = (ULONG_PTR)GetProcAddress;
+		Init.pLoadLibraryA = (ULONG_PTR)LoadLibraryA;
+		Init.pRtlAddFunctionTable = (ULONG_PTR)RtlAddFunctionTable;
+
 
 		HANDLE hFile=CreateFile(L"\\\\.\\OxygenDriver", GENERIC_WRITE, FILE_SHARE_WRITE, 0, OPEN_EXISTING, 0, nullptr);
 
@@ -57,7 +61,9 @@ int main() {
 
 		}
 
-		//EzPdbUnload(&pdb);
+		EzPdbUnload(&pdb);
+
+		system("pause");
 
 		return 0;
 	

@@ -112,6 +112,13 @@ struct InitPdb
 	ULONG_PTR uPspNotifyEnableMaskRva;
 	ULONG_PTR uApcState;
 	ULONG_PTR uUserApcPendingAll;
+	
+	//Shellcode 加载DLl
+	ULONG_PTR pLoadLibraryA;
+	ULONG_PTR pGetProcAddress;
+
+	//x64专属
+	ULONG_PTR pRtlAddFunctionTable;
 };
 
 //内核函数函数指针定义
@@ -143,9 +150,15 @@ public:
 	ULONG_PTR uVadRoot=0;
 	PLDR_DATA_TABLE_ENTRY uDriverSection = 0;//遍历Ldr_table_list_entry 找到ntosknrl基质
 	ULONG_PTR uNtosnrlBase = 0;
-	
+	//Shellcode 加载DLl
+	ULONG_PTR pLoadLibraryA=0;
+	ULONG_PTR pGetProcAddress=0;
+
+	//x64专属
+	ULONG_PTR pRtlAddFunctionTable=0;
 
 	ULONG_PTR uPspNotifyEnableMask = 0;
+
 	//c++单例设计模式
 	static Global* GetInstance();
 
