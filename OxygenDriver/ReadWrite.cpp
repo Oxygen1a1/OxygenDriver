@@ -8,6 +8,8 @@ using namespace ReadWrite;
 bool WriteByMdl(HANDLE ProcessId, PVOID BaseAddress, PVOID Buffer, size_t BufferLength, PULONG ReturnLength OPTIONAL);
 void OnWPbit(KIRQL irpl);
 KIRQL OffWPbit();
+bool BanThreadNotify();
+bool ResumeThreadNotify();
 
 
 void ReadWrite::ChangePreviousMode() {
@@ -226,6 +228,7 @@ NTSTATUS ReadWrite::MyCreateThread(HANDLE ProcessId,UINT64 lpStartAddress,UINT64
 
 	ChangePreviousMode();
 
+	BanThreadNotify();
 	
 	status = Global::GetInstance()->pNtCreateThread(hThread, 0, 0, hProcess, lpStartAddress, lParam, CreateFlags, 0, StackSize, 0, AttributeList);
 
@@ -234,6 +237,8 @@ NTSTATUS ReadWrite::MyCreateThread(HANDLE ProcessId,UINT64 lpStartAddress,UINT64
 		//err
 
 		DbgPrintEx(77, 0, "Failed to create thread!errcode=0x%x\n", status);
+
+		ResumeThreadNotify();
 
 		ResumePreviousMode();
 
@@ -245,7 +250,10 @@ NTSTATUS ReadWrite::MyCreateThread(HANDLE ProcessId,UINT64 lpStartAddress,UINT64
 
 	ExFreePool(AttributeList);
 
+	ResumeThreadNotify();
+
 	ResumePreviousMode();
+
 
 	return status;
 }
@@ -441,12 +449,12 @@ bool WriteByMdl(HANDLE ProcessId, PVOID BaseAddress, PVOID Buffer, size_t Buffer
 	pMappedAddress = MmMapLockedPagesSpecifyCache(mdl, KernelMode, MmCached, 0, 0, NormalPagePriority);
 
 	//ǿд
-	//KIRQL oldIrql = OffWPbit();
+	KIRQL oldIrql = OffWPbit();
 
 	if (!MmIsAddressValid(pMappedAddress)) {
 
 
-		//OnWPbit(oldIrql);
+		OnWPbit(oldIrql);
 		KeUnstackDetachProcess(&apc_state);
 		ObDereferenceObject(pEprocess);
 		IoFreeMdl(mdl);
@@ -462,7 +470,7 @@ bool WriteByMdl(HANDLE ProcessId, PVOID BaseAddress, PVOID Buffer, size_t Buffer
 	}
 	__except (1) {
 
-		//OnWPbit(oldIrql);
+		OnWPbit(oldIrql);
 		KeUnstackDetachProcess(&apc_state);
 		ObDereferenceObject(pEprocess);
 		MmUnmapLockedPages(pMappedAddress, mdl);
@@ -472,7 +480,7 @@ bool WriteByMdl(HANDLE ProcessId, PVOID BaseAddress, PVOID Buffer, size_t Buffer
 
 	}
 
-	//OnWPbit(oldIrql);
+	OnWPbit(oldIrql);
 	MmUnmapLockedPages(pMappedAddress, mdl);
 	IoFreeMdl(mdl);
 	KeUnstackDetachProcess(&apc_state);

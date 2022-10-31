@@ -48,7 +48,7 @@ namespace Injector_x64 {
 
 
 
-	BOOLEAN MmInjector_x64(HANDLE ProcessId, const wchar_t* wszDllPath);
+	BOOLEAN MmInjector_x64_BypassAce(HANDLE ProcessId, const wchar_t* wszDllPath);
 
 	/*BOOLEAN MemInject_PassTp_x64(HANDLE ProcessId,const wchar_t* wszDllPath);
 

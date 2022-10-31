@@ -4,6 +4,10 @@
 
 #define CTL_CODE_INIT CTL_CODE(0x8000,0x801,0,0)
 
+
+
+
+
 //用于进线程创建的AttributeList 0环要转成CreateProcessContext 变长数组
 typedef struct _SECURITY_ATTRIBUTES {
 	DWORD32 nLength;
@@ -112,13 +116,21 @@ struct InitPdb
 	ULONG_PTR uPspNotifyEnableMaskRva;
 	ULONG_PTR uApcState;
 	ULONG_PTR uUserApcPendingAll;
-	
+	ULONG_PTR uRvaMmpfndatabase;
+	ULONG_PTR uOriginPte;
+	ULONG_PTR fLdrInitializeThunk = 0;
+	ULONG_PTR fZwContinue = 0;
+	ULONG_PTR fRtlRaiseStatus = 0;
 	//Shellcode 加载DLl
-	ULONG_PTR pLoadLibraryA;
-	ULONG_PTR pGetProcAddress;
-
+	ULONG_PTR pLoadLibraryA=0;
+	ULONG_PTR pGetProcAddress=0;
 	//x64专属
-	ULONG_PTR pRtlAddFunctionTable;
+	ULONG_PTR pRtlAddFunctionTable=0;
+
+	//因为是在对方Hook里面 所以把LdrInitializeThunk的第一个Call地址传一下
+	ULONG_PTR uLdrFirstCall = 0;
+
+
 };
 
 //内核函数函数指针定义
@@ -143,7 +155,9 @@ public:
 	pNtReadVirtualMemory pNtRead=0;
 	pNtProtectVirtualMemory pNtProtect=0;
 
-
+	ULONG_PTR fLdrInitializeThunk=0;
+	ULONG_PTR fZwContinue=0;
+	ULONG_PTR fRtlRaiseStatus=0;
 	ULONG_PTR uThreadPreviouMode=0;
 	ULONG_PTR uApcState = 0;
 	ULONG_PTR uApcUserPendingAll = 0;
@@ -157,7 +171,14 @@ public:
 	//x64专属
 	ULONG_PTR pRtlAddFunctionTable=0;
 
+	
 	ULONG_PTR uPspNotifyEnableMask = 0;
+	//物理页帧数据库
+	ULONG_PTR uMmpfnDatabase = 0;
+	//原型PTE的偏移
+	ULONG_PTR uOriginPte=0;
+
+	ULONG_PTR uLdrFirstCall = 0;
 
 	//c++单例设计模式
 	static Global* GetInstance();

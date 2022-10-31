@@ -154,12 +154,16 @@
     <ClCompile Include="Injector.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="PageAttrHide.cpp" />
+    <ClCompile Include="PTEHook.cpp" />
     <ClCompile Include="ReadWrite.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="APC.h" />
     <ClInclude Include="Global.h" />
     <ClInclude Include="Injector.h" />
+    <ClInclude Include="PageAttrHide.h" />
+    <ClInclude Include="PTEHook.h" />
     <ClInclude Include="ReadWrite.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

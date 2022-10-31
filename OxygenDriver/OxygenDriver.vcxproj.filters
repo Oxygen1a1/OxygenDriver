@@ -26,14 +26,17 @@
     <Filter Include="Source Files\ReadWrite">
       <UniqueIdentifier>{77f6c2d1-4b82-497c-ba94-030fd7005ac8}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\VadMotify">
-      <UniqueIdentifier>{847d53bc-3c6c-4af0-808e-99e7416142a4}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\Injector">
       <UniqueIdentifier>{cd3eb9bd-6baf-4771-a7fb-fc28eb5d34fe}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\APC">
       <UniqueIdentifier>{3be552b0-d3b5-45bf-90a6-5d3d73440429}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\PageAttrHide">
+      <UniqueIdentifier>{847d53bc-3c6c-4af0-808e-99e7416142a4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\PTEHook">
+      <UniqueIdentifier>{5541ee0d-1227-420d-998a-fc417c0562b4}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -52,6 +55,12 @@
     <ClCompile Include="Injector.cpp">
       <Filter>Source Files\Injector</Filter>
     </ClCompile>
+    <ClCompile Include="PageAttrHide.cpp">
+      <Filter>Source Files\PageAttrHide</Filter>
+    </ClCompile>
+    <ClCompile Include="PTEHook.cpp">
+      <Filter>Source Files\PTEHook</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Global.h">
@@ -64,6 +73,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Injector.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PageAttrHide.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PTEHook.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

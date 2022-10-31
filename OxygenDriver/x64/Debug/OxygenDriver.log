@@ -1,6 +1,8 @@
 ﻿  Building 'OxygenDriver' with toolset 'WindowsKernelModeDriver10.0' and the 'Desktop' target platform.
   APC.cpp
   Global.cpp
+  PageAttrHide.cpp
+  PTEHook.cpp
   ReadWrite.cpp
   正在生成代码...
   DriverInit.cpp

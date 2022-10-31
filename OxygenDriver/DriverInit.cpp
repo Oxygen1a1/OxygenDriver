@@ -4,6 +4,8 @@
 #include "APC.h"
 #include "ReadWrite.h"
 #include "Injector.h"
+#include "PageAttrHide.h"
+
 
 #pragma warning(disable : 4100)
 
@@ -32,9 +34,6 @@ ULONG_PTR GetNtOskrnlBase();
 
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegPath) {
 	UNREFERENCED_PARAMETER(RegPath);
-
-	
-
 	return LoadDevAndSymLink(DriverObject);
 
 }
@@ -99,14 +98,24 @@ NTSTATUS DispatchFuncDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 		Global::GetInstance()->pNtProtect = (pNtProtectVirtualMemory)(uNtosnrlBase + buffer->uRvaNtProtect);
 		Global::GetInstance()->pNtWrite = (pNtWriteVirtualMemory)(uNtosnrlBase + buffer->uRvaNtWrite);
 		Global::GetInstance()->pNtRead = (pNtReadVirtualMemory)(uNtosnrlBase + buffer->uRvaNtRead);
+		Global::GetInstance()->uPspNotifyEnableMask = buffer->uPspNotifyEnableMaskRva + uNtosnrlBase;
+		Global::GetInstance()->uMmpfnDatabase = buffer->uRvaMmpfndatabase + uNtosnrlBase;
+
+
 		Global::GetInstance()->uVadRoot = buffer->uVadRoot;
 		Global::GetInstance()->uThreadPreviouMode = buffer->uThreadPreviouMode;
-		Global::GetInstance()->uPspNotifyEnableMask = buffer->uPspNotifyEnableMaskRva+uNtosnrlBase;
 		Global::GetInstance()->uApcState = buffer->uApcState;
 		Global::GetInstance()->uApcUserPendingAll = buffer->uUserApcPendingAll;
 		Global::GetInstance()->pGetProcAddress = buffer->pGetProcAddress;
 		Global::GetInstance()->pLoadLibraryA = buffer->pLoadLibraryA;
 		Global::GetInstance()->pRtlAddFunctionTable = buffer->pRtlAddFunctionTable;
+		Global::GetInstance()->uOriginPte = buffer->uOriginPte;
+		Global::GetInstance()->uLdrFirstCall = buffer->uLdrFirstCall;
+
+
+		Global::GetInstance()->fLdrInitializeThunk = buffer->fLdrInitializeThunk;
+		Global::GetInstance()->fZwContinue = buffer->fZwContinue;
+		Global::GetInstance()->fRtlRaiseStatus = buffer->fRtlRaiseStatus;
 
 		//DbgBreakPoint();
 
@@ -201,7 +210,7 @@ NTSTATUS DispatchFuncDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 
 
 		//Dll×¢Èë²âÊÔ
-		Injector_x64::MmInjector_x64((HANDLE)3744, L"\\??\\C:\\Users\\Administrator\\Desktop\\InjectorTest.dll");
+		Injector_x64::MmInjector_x64_BypassAce((HANDLE)7668, L"\\??\\C:\\Users\\Admin\\Desktop\\InjectorTest.dll");
 
 		Irp->IoStatus.Status = STATUS_SUCCESS;
 		Irp->IoStatus.Information = sizeof(InitPdb);

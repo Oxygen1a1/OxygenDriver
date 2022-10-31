@@ -1,7 +1,7 @@
 #include "Injector.h"
 #include "Global.h"
 #include "ReadWrite.h"
-
+#include "PageAttrHide.h"
 
 
 using namespace Injector_x64;
@@ -12,13 +12,15 @@ using namespace Injector_x64;
 //Dll映射的内存
 PVOID g_pMemDll;
 
+//去除ACE对于R3 的Hook
+ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId, char* OriBytes);
+
+
 //用于Dll重定位的ShellCode
 void __stdcall ShellCode(Manual_Mapping_data* pData);
-
-
 BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize);
 
-BOOLEAN Injector_x64::MmInjector_x64(HANDLE ProcessId,const wchar_t* wszDllPath) {
+BOOLEAN Injector_x64::MmInjector_x64_BypassAce(HANDLE ProcessId,const wchar_t* wszDllPath) {
 	
 	UNREFERENCED_PARAMETER(wszDllPath);
 	UNREFERENCED_PARAMETER(ProcessId);
@@ -199,6 +201,10 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 	status=ReadWrite::MyAllocMem(ProcessId,(PVOID*)&pStartMapAddr,0,&size,MEM_COMMIT, PAGE_EXECUTE_READWRITE,0);
 
+	//修改原型PTE 规避检查
+
+	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pStartMapAddr, MM_READONLY);
+
 	if (!NT_SUCCESS(status)) {
 
 		//分配失败
@@ -264,7 +270,9 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 		return 0;
 	}
 
+	//修改原型PTE规避检查
 
+	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pManulMapData, MM_READONLY);
 
 	if (!NT_SUCCESS(ReadWrite::MyWriteMem(ProcessId, pManulMapData, ManualMapData, ManuaMapDataSize, 0))) {
 
@@ -289,6 +297,10 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 	}
 
+	//修改原型PTE 规避检查
+
+	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pShellCode, MM_READONLY);
+
 
 	if (!NT_SUCCESS(ReadWrite::MyWriteMem(ProcessId, pShellCode, ShellCode, ShellCodeSize, 0))) {
 
@@ -303,6 +315,19 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 	HANDLE ThreadId;
 
+	//过TP需要去除 去R3的 LdrInitializeThunk的Hook
+
+	char OriBytes[14];
+
+	if (!BanACELdrInitializeThunkHook(ProcessId, OriBytes)) {
+
+		DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to ban ace's r3 hook at ldrinitializethunk\r\n");
+
+		return 0;
+
+
+	}
+
 	if (!NT_SUCCESS(ReadWrite::MyCreateThread(ProcessId, (UINT64)pShellCode, (UINT64)pManulMapData, 0, 0, &ThreadId))) {
 
 		DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to setup new thread\r\n");
@@ -311,6 +336,9 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 
 	}
+
+
+	
 
 	DbgPrintEx(77, 0, "[OxygenDriver]info:Create Thread Successly ThreadId:0x%x\r\n", ThreadId);
 
@@ -464,3 +492,227 @@ void __stdcall ShellCode(Manual_Mapping_data* pData) {
 
 
 }
+
+
+ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId,char* OriBytes) {
+
+
+
+	ULONG_PTR uLdrInitializeThunk = Global::GetInstance()->fLdrInitializeThunk;
+	ULONG_PTR uZwContinue = (ULONG_PTR)Global::GetInstance()->fZwContinue;
+	ULONG_PTR uRtlRaiseStatus = (ULONG_PTR)Global::GetInstance()->fRtlRaiseStatus;
+	
+
+	CHAR OldBytes[5];
+
+
+	if (!NT_SUCCESS(ReadWrite::MyReadMem(ProcessId, (PVOID)uLdrInitializeThunk, OldBytes, sizeof(OldBytes), 0))) {
+
+		DbgPrintEx(77,0,"[OxygenDriver]err:Failed to read ldrinitializethunk\r\n");
+		return 0;
+	}
+
+
+
+
+
+	DWORD32 dwOldProtect;
+	size_t ProtectSize = 0x1000;
+
+	if (!NT_SUCCESS(ReadWrite::MyProtectMem(ProcessId, (PVOID*)&uLdrInitializeThunk, &ProtectSize, PAGE_EXECUTE_READWRITE, &dwOldProtect))) {
+
+		DbgPrintEx(77, 0, "[OxygenDriver]err:changed virtualprotect err!\r\n");
+
+		//改变失败没关系
+
+	}
+
+
+
+
+
+	//获取ACE HOOK的真正地址
+	ULONG_PTR uCurAddress = uLdrInitializeThunk;
+
+	while (1) {
+		BOOLEAN bDone = 0;
+		//ACE不知道有多少层指针 所以需要循环测试
+		char bDef;//来确定是不是Hook
+		ReadWrite::MyWriteMem(ProcessId,(PVOID)(uCurAddress), &bDef, sizeof(bDef), 0);
+		switch (bDef)
+		{
+		case 0xff: {//FF 25调用
+			ULONG_PTR uTemp;
+			ReadWrite::MyWriteMem(ProcessId, (PVOID)(uCurAddress + 6), &uTemp, sizeof(uTemp), 0);
+			uCurAddress = uTemp;
+			break;
+		}
+		case 0xe9: {//E9 四字节偏移调用
+			int offset;
+			ReadWrite::MyWriteMem(ProcessId, (PVOID)(uCurAddress + 1), &offset, sizeof(int), 0);
+			uCurAddress += 5 + offset;
+			break;
+		}
+		default:
+			//如果都不是 说明已经找到地址了 返回即可
+			bDone = 1;
+			break;
+		}
+		if (bDone == 1) break;
+	}
+
+
+
+	//if (uCurAddress == uLdrInitializeThunk) {
+
+	//	//没被Hook
+	//	return 1;
+
+	//}
+
+#pragma warning(disable : 4838)
+#pragma warning(disable : 4309)
+		//修改 Hook的地址 然后ShellCode
+	// 
+	// 
+	//00007FF8FC244C60 <ntdll.LdrInitializeThunk> | 40:53 | push rbx |
+	//00007FF8FC244C62 | 48 : 83EC 20 | sub rsp, 0x20 |
+	//00007FF8FC244C66 | 48 : 8BD9 | mov rbx, rcx |
+	//00007FF8FC244C69 | E8 1A000000 | call ntdll.7FF8FC244C88 |
+	//00007FF8FC244C6E | B2 01 | mov dl, 0x1 |
+	//00007FF8FC244C70 | 48 : 8BCB | mov rcx, rbx |
+	//00007FF8FC244C73 | E8 588D0200 | call <ntdll.ZwContinue> |
+	//00007FF8FC244C78 | 8BC8 | mov ecx, eax |
+	//00007FF8FC244C7A | E8 81DC0800 | call <ntdll.RtlRaiseStatus> |
+	CHAR LdrInitializeThunkShellCode[] = { 0x40,0x53,//push rbx
+	0x48,0x83,0xec,0x20,//sub rsp, 0x20
+	0x48,0x8b,0xd9,//mov rbx, rcx
+	0x48,0x83,0xec,0x08,//sub rsp,8 index=13
+	0xC7,0x44,0x24,0x04,0x00,0x00,0x00,0x00,0xC7,0x04,0x24,0x00,0x00,0x00,0x00, //push rip(自己计算) index=28
+	0xff,0x25,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,//jmp到LdrInit的第一个call index=42
+	0xb2,0x01,//mov dl,0x1 index=44
+	0x48,0x8b,0xcb,//mov rcx,rbx index = 47
+	0x48,0x83,0xec,0x08,//sub rsp,8 index =51
+	0xC7,0x44,0x24,0x04,0x00,0x00,0x00,0x00,0xC7,0x04,0x24,0x00,0x00,0x00,0x00, //push rip(自己计算) index=66
+	0xff,0x25,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,//jmp到ZwContinue 自己填充 index=80
+	0x8b,0xc8,//mov ecx,eax index=82
+	0x48,0x83,0xec,0x08,//sub rsp,8 index=86
+	0xC7,0x44,0x24,0x04,0x00,0x00,0x00,0x00,0xC7,0x04,0x24,0x00,0x00,0x00,0x00, //push rip(自己计算) index=101
+	0xff,0x25,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,//jmp到RtlRaiseStatus 自己填充 index=155
+	};
+
+	//获取那三个Call
+	ULONG_PTR uFirstCall = 0;
+	ULONG_PTR uSecondCall = uZwContinue;
+	ULONG_PTR uThirdCall = uRtlRaiseStatus;
+
+	for (ULONG_PTR uCur = uLdrInitializeThunk;; uCur++) {
+		if (*(PUCHAR)uCur == 0xE8) {
+			//找到了
+			int offset = *(int*)(uCur + 1);
+			uFirstCall = uCur + 5 + offset;
+			break;
+		}
+
+	}
+
+
+	KdPrint(("[OxygenDriver]info:LdrInitializeThunk三个Call的地址:0x%p,0x%p,0x%p\n", uFirstCall, uSecondCall, uThirdCall));
+
+
+	KdPrint(("[OxygenDriver]info:进程传过来的Call:0x%p\r\n", Global::GetInstance()->uLdrFirstCall));
+
+	//填充三个Call
+	*(ULONG_PTR*)(&LdrInitializeThunkShellCode[34]) = Global::GetInstance()->uLdrFirstCall;
+	*(ULONG_PTR*)(&LdrInitializeThunkShellCode[72]) = uSecondCall;
+	*(ULONG_PTR*)(&LdrInitializeThunkShellCode[107]) = uThirdCall;
+
+	PVOID pAllocAddr=0;
+	size_t AllocSize=0x1000;
+	
+
+	if (!NT_SUCCESS(ReadWrite::MyAllocMem(ProcessId, &pAllocAddr, 0, &AllocSize, MEM_COMMIT, PAGE_EXECUTE_READWRITE, 0))) {
+		
+		DbgPrintEx(77, 0, "[OxygenDriver]info:Alloc mem for Ldrinitializethunk err!\r\n");
+
+		return 0;
+	}
+
+
+	//修改原型PTE修改属性 规避BE检查
+
+	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pAllocAddr, MM_READONLY);
+
+	//填充RIP返回地址
+
+	ULONG_PTR uFirstRet = (ULONG_PTR)pAllocAddr + 42;
+	ULONG_PTR uSecondRet = (ULONG_PTR)pAllocAddr + 80;
+	ULONG_PTR uThiredRet = (ULONG_PTR)pAllocAddr + 115;
+
+
+#define HIDWORD(l)           ((DWORD32)((((ULONG_PTR)(l)) >> 32) & 0xffffffff)) 
+#define LOWDWORD(l)           ((DWORD32)((((ULONG_PTR)(l))) & 0xffffffff)) 
+
+	* (PDWORD32)(&LdrInitializeThunkShellCode[17]) = HIDWORD(uFirstRet);
+	*(PDWORD32)(&LdrInitializeThunkShellCode[24]) = LOWDWORD(uFirstRet);
+
+	*(PDWORD32)(&LdrInitializeThunkShellCode[55]) = HIDWORD(uSecondRet);
+	*(PDWORD32)(&LdrInitializeThunkShellCode[62]) = LOWDWORD(uSecondRet);
+
+	*(PDWORD32)(&LdrInitializeThunkShellCode[90]) = HIDWORD(uThiredRet);
+	*(PDWORD32)(&LdrInitializeThunkShellCode[97]) = LOWDWORD(uThiredRet);
+
+
+
+	if (!NT_SUCCESS(ReadWrite::MyWriteMem(ProcessId, pAllocAddr, LdrInitializeThunkShellCode, sizeof(LdrInitializeThunkShellCode), 0))) {
+
+		DbgPrintEx(77,0,"[OxygenDriver]info:Failed to write mem for Ldrinitializethunk\r\n");
+		
+		return 0;
+
+	}
+
+
+
+	//修改ACE Hook的地方
+	ULONG_PTR uSavedCurAddress = uCurAddress;
+
+
+	KdPrint(("[OxygenDriver]:SavedCurAddress==0x%p\r\n", uSavedCurAddress));
+
+	ReadWrite::MyProtectMem(ProcessId, (PVOID*)&uCurAddress, &ProtectSize, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+
+	//注意 这个时候uCurAddress已经改变了
+	//所以保存一下 因为ProtectMem会修改
+
+	//CHAR aHookOriBytes[14];
+
+#define HOOKSIZE 14
+
+
+	if (!NT_SUCCESS(ReadWrite::MyReadMem(ProcessId, (PVOID)uSavedCurAddress, OriBytes, HOOKSIZE, 0))) {
+
+		DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to write mem for hook addr\r\n");
+
+		return 0;
+	}
+
+	CHAR JmpShellCode[] = { 0xff, 0x25, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,0x00, 0x00, 0x00, 0x00 };
+
+
+	*(ULONG_PTR*)(&JmpShellCode[6]) = (ULONG_PTR)pAllocAddr;
+
+
+
+	if (!NT_SUCCESS(ReadWrite::MyWriteMem(ProcessId, (PVOID)uSavedCurAddress, JmpShellCode, sizeof(JmpShellCode), 0))) {
+
+		DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to write mem for hook addr\r\n");
+
+		return 0;
+
+	}
+
+	return 1;
+
+}
+
