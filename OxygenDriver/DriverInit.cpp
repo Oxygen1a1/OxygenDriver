@@ -91,6 +91,8 @@ NTSTATUS DispatchFuncDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 
 		}
 
+
+
 		//³õÊ¼»¯Global
 		Global::GetInstance()->uNtosnrlBase = uNtosnrlBase;
 		Global::GetInstance()->pNtAlloc = (pNtAllocateVirtualMemory)(uNtosnrlBase + buffer->uRvaNtAlloc);
@@ -210,7 +212,7 @@ NTSTATUS DispatchFuncDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 
 
 		//Dll×¢Èë²âÊÔ
-		Injector_x64::MmInjector_x64_BypassAce((HANDLE)7668, L"\\??\\C:\\Users\\Admin\\Desktop\\InjectorTest.dll");
+		Injector_x64::MmInjector_x64_BypassAce((HANDLE)8808, L"\\??\\C:\\Users\\Administrator\\Desktop\\InjectorTest.dll");
 
 		Irp->IoStatus.Status = STATUS_SUCCESS;
 		Irp->IoStatus.Information = sizeof(InitPdb);

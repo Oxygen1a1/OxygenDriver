@@ -81,7 +81,7 @@ namespace PageAttrHide{
 	void GetLineAddrPteTable(_Inout_ PteTable* Table);
 	//改变0x1000范围内线性地址的VAD属性
 	//修改原型PTE, 不影响真正的PTE,但是无法通过API读写执行检查
-	void ChangeVadAttributes(ULONG_PTR uAddr, UINT32 Attributes);
+	void  ChangeVadAttributes(ULONG_PTR uAddr, UINT32 Attributes, HANDLE ProcessId);
 
 
 

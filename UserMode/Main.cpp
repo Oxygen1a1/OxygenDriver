@@ -36,7 +36,7 @@ int main() {
 		Init.uRvaNtProtect = (ULONG_PTR)EzPdbGetRva(&pdb, "NtProtectVirtualMemory");
 		Init.uRvaNtRead = (ULONG_PTR)EzPdbGetRva(&pdb, "NtReadVirtualMemory");
 		Init.uRvaNtWrite = (ULONG_PTR)EzPdbGetRva(&pdb, "NtWriteVirtualMemory");
-		Init.uRvaMmpfndatabase = (ULONG_PTR)EzPdbGetRva(&pdb, "MmPfnDataBase");
+		Init.uRvaMmpfndatabase = (ULONG_PTR)EzPdbGetRva(&pdb, "MmPfnDatabase");
 		Init.uVadRoot = (ULONG_PTR)EzPdbGetStructPropertyOffset(&pdb, "_EPROCESS", L"VadRoot");
 		Init.uThreadPreviouMode = (ULONG_PTR)EzPdbGetStructPropertyOffset(&pdb, "_KTHREAD", L"PreviousMode");
 		Init.uApcState = (ULONG_PTR)EzPdbGetStructPropertyOffset(&pdb, "_KTHREAD", L"ApcStateFill");

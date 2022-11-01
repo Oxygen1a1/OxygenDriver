@@ -203,7 +203,7 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 	//修改原型PTE 规避检查
 
-	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pStartMapAddr, MM_READONLY);
+	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pStartMapAddr, MM_NOACCESS,ProcessId);
 
 	if (!NT_SUCCESS(status)) {
 
@@ -272,7 +272,7 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 	//修改原型PTE规避检查
 
-	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pManulMapData, MM_READONLY);
+	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pManulMapData, MM_READONLY, ProcessId);
 
 	if (!NT_SUCCESS(ReadWrite::MyWriteMem(ProcessId, pManulMapData, ManualMapData, ManuaMapDataSize, 0))) {
 
@@ -299,7 +299,7 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 	//修改原型PTE 规避检查
 
-	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pShellCode, MM_READONLY);
+	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pShellCode, MM_READONLY, ProcessId);
 
 
 	if (!NT_SUCCESS(ReadWrite::MyWriteMem(ProcessId, pShellCode, ShellCode, ShellCodeSize, 0))) {
@@ -315,18 +315,18 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 	HANDLE ThreadId;
 
-	//过TP需要去除 去R3的 LdrInitializeThunk的Hook
+	////过TP需要去除 去R3的 LdrInitializeThunk的Hook
 
-	char OriBytes[14];
+	//char OriBytes[14];
 
-	if (!BanACELdrInitializeThunkHook(ProcessId, OriBytes)) {
+	////if (!BanACELdrInitializeThunkHook(ProcessId, OriBytes)) {
 
-		DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to ban ace's r3 hook at ldrinitializethunk\r\n");
+	////	DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to ban ace's r3 hook at ldrinitializethunk\r\n");
 
-		return 0;
+	////	return 0;
 
 
-	}
+	////}
 
 	if (!NT_SUCCESS(ReadWrite::MyCreateThread(ProcessId, (UINT64)pShellCode, (UINT64)pManulMapData, 0, 0, &ThreadId))) {
 
@@ -641,7 +641,7 @@ ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId,char* OriBytes) {
 
 	//修改原型PTE修改属性 规避BE检查
 
-	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pAllocAddr, MM_READONLY);
+	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pAllocAddr, MM_READONLY, ProcessId);
 
 	//填充RIP返回地址
 

@@ -92,7 +92,7 @@ void PageAttrHide::GetLineAddrPteTable(_Inout_ PteTable* Table)
 }
 #pragma warning(disable : 4100)
 #pragma warning(disable : 4189)
-void PageAttrHide::ChangeVadAttributes(ULONG_PTR uAddr,UINT32 Attributes)
+void PageAttrHide::ChangeVadAttributes(ULONG_PTR uAddr,UINT32 Attributes,HANDLE ProcessId)
 {
 
 
@@ -101,8 +101,19 @@ void PageAttrHide::ChangeVadAttributes(ULONG_PTR uAddr,UINT32 Attributes)
 	PteTable Table;
 	Table.pLineAddr = uAddr;
 	ULONG_PTR uOrginPte = Global::GetInstance()->uOriginPte;
+	PEPROCESS Process = 0;
+	KAPC_STATE Apc = { 0 };
 
+	//修改进程要进行挂靠
+	if (!NT_SUCCESS(PsLookupProcessByProcessId(ProcessId, &Process))) {
 
+		DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to get process to change page attributes\r\n");
+
+		return;
+	}
+
+	
+	KeStackAttachProcess(Process, &Apc);
 
 	//有可能找不到
 	if(!uOrginPte)
@@ -110,7 +121,7 @@ void PageAttrHide::ChangeVadAttributes(ULONG_PTR uAddr,UINT32 Attributes)
 
 	//这个地方出错了
 
-	DbgBreakPoint();
+
 
 	ULONG_PTR MmPfnDataBase = *(ULONG_PTR*)(Global::GetInstance()->uMmpfnDatabase);
 
@@ -121,6 +132,8 @@ void PageAttrHide::ChangeVadAttributes(ULONG_PTR uAddr,UINT32 Attributes)
 	//OriginalPte 在0x28偏移处
 
 	GetLineAddrPteTable(&Table);
+
+
 
 	//获取物理地址
 	phPteIndex = *(UINT64*)(Table.Pte);
@@ -133,9 +146,9 @@ void PageAttrHide::ChangeVadAttributes(ULONG_PTR uAddr,UINT32 Attributes)
 	//解析原型PTE
 	MMPTE_SOFTWARE* pOriginPte = (MMPTE_SOFTWARE*)(MmPfnDataBase + uMmpfnSize * phPteIndex + uOrginPte);
 	//修改属性
-	pOriginPte->Protection |= Attributes;
+	pOriginPte->Protection = Attributes;
 
 	
-
+	KeUnstackDetachProcess(&Apc);
 
 }
