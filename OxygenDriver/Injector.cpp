@@ -18,9 +18,9 @@ ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId, char* OriBytes);
 
 //用于Dll重定位的ShellCode
 void __stdcall ShellCode(Manual_Mapping_data* pData);
-BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize);
+BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize,BOOLEAN bPassAce);
 
-BOOLEAN Injector_x64::MmInjector_x64_BypassAce(HANDLE ProcessId,const wchar_t* wszDllPath) {
+BOOLEAN Injector_x64::MmInjector_x64_BypassProtect(HANDLE ProcessId,const wchar_t* wszDllPath,BOOLEAN bPassAce) {
 	
 	UNREFERENCED_PARAMETER(wszDllPath);
 	UNREFERENCED_PARAMETER(ProcessId);
@@ -91,8 +91,17 @@ BOOLEAN Injector_x64::MmInjector_x64_BypassAce(HANDLE ProcessId,const wchar_t* w
 	}
 	
 #pragma warning(disable : 4244)
+	KdPrint(("[OxygenDriver]file size:0x%x\r\n", FileSize));
+
+	FileSize += 0x1000;
+
+	FileSize &= 0xfffffffffffff000;
+
 	g_pMemDll=ExAllocatePoolWithTag(NonPagedPool, FileSize, MEM_DLL_TAGS);
 
+	
+
+	
 
 	memset(g_pMemDll, 0, fileinfo.AllocationSize.QuadPart);
 
@@ -123,7 +132,7 @@ BOOLEAN Injector_x64::MmInjector_x64_BypassAce(HANDLE ProcessId,const wchar_t* w
 
 	
 
-	if (!MmMapDll(ProcessId, g_pMemDll, FileSize)) {
+	if (!MmMapDll(ProcessId, g_pMemDll, FileSize,bPassAce)) {
 
 		DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to Mm map dll\r\n");
 
@@ -164,7 +173,7 @@ BOOLEAN Injector_x64::MmInjector_x64_BypassAce(HANDLE ProcessId,const wchar_t* w
 
 
 //this func aim to Map a section to process,and relocate
-BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
+BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize,BOOLEAN bPassAce) {
 	UNREFERENCED_PARAMETER(FileSize);
 
 	IMAGE_NT_HEADERS* pNtHeader = nullptr;
@@ -203,7 +212,7 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 	//修改原型PTE 规避检查
 
-	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pStartMapAddr, MM_NOACCESS,ProcessId);
+	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pStartMapAddr, MM_READONLY,ProcessId);
 
 	if (!NT_SUCCESS(status)) {
 
@@ -315,18 +324,23 @@ BOOLEAN MmMapDll(HANDLE ProcessId, PVOID pFileData, UINT64 FileSize) {
 
 	HANDLE ThreadId;
 
+	//指定了过ace的话 需要
 	////过TP需要去除 去R3的 LdrInitializeThunk的Hook
 
-	//char OriBytes[14];
+	if (bPassAce) {
 
-	////if (!BanACELdrInitializeThunkHook(ProcessId, OriBytes)) {
+		char OriBytes[14];
 
-	////	DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to ban ace's r3 hook at ldrinitializethunk\r\n");
+		if (!BanACELdrInitializeThunkHook(ProcessId, OriBytes)) {
 
-	////	return 0;
+			DbgPrintEx(77, 0, "[OxygenDriver]err:Failed to ban ace's r3 hook at ldrinitializethunk\r\n");
 
+			return 0;
 
-	////}
+		}
+
+	}
+
 
 	if (!NT_SUCCESS(ReadWrite::MyCreateThread(ProcessId, (UINT64)pShellCode, (UINT64)pManulMapData, 0, 0, &ThreadId))) {
 
@@ -363,66 +377,50 @@ void __stdcall ShellCode(Manual_Mapping_data* pData) {
 
 
 	//重定位表
+
+
 	char* LocationDelta = pBase - pOpt->ImageBase;
-
 	if (LocationDelta) {
-		//有差别 需要重定位
 		if (pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size) {
-			//可选头数据目录表的重定位表
-			
-			//找到重定位表的数组指针 重定位表不一定是只有一个 根据size获取结束位置
-			IMAGE_BASE_RELOCATION* pRelocData = (IMAGE_BASE_RELOCATION*)(pBase + pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress);
-
-			//size是指重定位表数组的大小
-			//重定位表是个变长的！
-			IMAGE_BASE_RELOCATION* pRelocEnd = (IMAGE_BASE_RELOCATION*)((ULONG_PTR)pRelocData + pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size);
-
-			
-			while (pRelocData<pRelocEnd && pRelocData->SizeOfBlock) {
-
-				//每一个重定位表是个变长数组 
+			auto* pRelocData = reinterpret_cast<IMAGE_BASE_RELOCATION*>(pBase + pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress);
+			const auto* pRelocEnd = reinterpret_cast<IMAGE_BASE_RELOCATION*>(reinterpret_cast<uintptr_t>(pRelocData) + pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size);
+			while (pRelocData < pRelocEnd && pRelocData->SizeOfBlock) {
+				//重定位表有很多个
+				//重定位的个数不包括IMAGE_BASE_RELOCATION这个地方
+				//重定位的偏移的大小是WORD
+				UINT64 AmountOfEntries = (pRelocData->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(short);
+				//指向重定位的偏移
 				//typedef struct _IMAGE_BASE_RELOCATION {
-				//	ULONG   VirtualAddress;
-				//	ULONG   SizeOfBlock;
-				//	//  USHORT  TypeOffset[1];
-				//} IMAGE_BASE_RELOCATION;
-				//TypeOffset就是重定位数据 不包括前面8个字节
-				UINT32 AmountOfEntries = (pRelocData->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(UINT16);
+				//	DWORD   VirtualAddress; //重定位表起始地址的RVA
+				//	DWORD   SizeOfBlock;
+				//	//  WORD    TypeOffset[1];
+				//Windows重定位表是按页涉及的
+				//相近的地址,都放在了这一个RVA里面.
+				//TypeOffset中高4位是这个重定表项的类型
+				//低12位 表示在这个一页(4KB)的偏移
+				unsigned short* pRelativeInfo = reinterpret_cast<unsigned short*>(pRelocData + 1);
 
-				//获取第一个TypeOffset
-				INT16* pRelativeInfo= (INT16*)(pRelocData + 1);
+				for (UINT64 i = 0; i != AmountOfEntries; ++i, ++pRelativeInfo) {
+					//遍历重定表的TypeOffset
+					if (RELOC_FLAG(*pRelativeInfo)) {
+						//判断高4位 是否需要重定位
 
-				for (UINT32 i = 0; i < AmountOfEntries; i++, pRelativeInfo++) {
-
-					if (RELOC_FLAG64(*pRelativeInfo)) {
-						//根据这个宏判断当前这个TypeOffset是否需要重定位
-
+						//只有直接寻址才需要重定位
 						//pBase+RVA==需要重定位页面
 						//页面+0xfff & TypeOffset 就是要重定位的地址(一个直接地址)
 						UINT_PTR* pPatch = reinterpret_cast<UINT_PTR*>(pBase + pRelocData->VirtualAddress + ((*pRelativeInfo) & 0xFFF));
 						//所以我们要把这个地址加上真正装载地址减去ImageBase
 						*pPatch += reinterpret_cast<UINT_PTR>(LocationDelta);
-
-
 					}
-
-
 				}
-
-				//下一个重定位表
-				pRelocData = (IMAGE_BASE_RELOCATION*)((ULONG_PTR)pRelocData + pRelocData->SizeOfBlock);
+				//下一个重定位表(毕竟不止一个页面需要重定位)
+				pRelocData = reinterpret_cast<IMAGE_BASE_RELOCATION*>(reinterpret_cast<char*>(pRelocData) + pRelocData->SizeOfBlock);
 			}
-
-
-
 		}
-
-
-
-
 	}
 
 	//修复IAT表
+
 	if (pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size) {
 		
 		IMAGE_IMPORT_DESCRIPTOR * pImportDescr = (IMAGE_IMPORT_DESCRIPTOR*)(pBase + pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
@@ -471,9 +469,16 @@ void __stdcall ShellCode(Manual_Mapping_data* pData) {
 
 	//填充TLS回调
 #define DLL_PROCESS_ATTACH 1
+
 	if (pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS].Size) {
+
+
 		auto* pTLS = reinterpret_cast<IMAGE_TLS_DIRECTORY*>(pBase + pOpt->DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS].VirtualAddress);
+		
+		//注意 这里要进行重定位
+		//TLS表的CallBack要加LocationDelta
 		auto* pCallback = reinterpret_cast<PIMAGE_TLS_CALLBACK*>(pTLS->AddressOfCallBacks);
+		
 		for (; pCallback && *pCallback; ++pCallback)
 			(*pCallback)(pBase, DLL_PROCESS_ATTACH, nullptr);
 	}
@@ -519,14 +524,6 @@ ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId,char* OriBytes) {
 	DWORD32 dwOldProtect;
 	size_t ProtectSize = 0x1000;
 
-	if (!NT_SUCCESS(ReadWrite::MyProtectMem(ProcessId, (PVOID*)&uLdrInitializeThunk, &ProtectSize, PAGE_EXECUTE_READWRITE, &dwOldProtect))) {
-
-		DbgPrintEx(77, 0, "[OxygenDriver]err:changed virtualprotect err!\r\n");
-
-		//改变失败没关系
-
-	}
-
 
 
 
@@ -534,23 +531,28 @@ ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId,char* OriBytes) {
 	//获取ACE HOOK的真正地址
 	ULONG_PTR uCurAddress = uLdrInitializeThunk;
 
+	KdPrint(("LdrInitialzeThunk=0x%p\r\n", uCurAddress));
+
+
 	while (1) {
 		BOOLEAN bDone = 0;
 		//ACE不知道有多少层指针 所以需要循环测试
 		char bDef;//来确定是不是Hook
-		ReadWrite::MyWriteMem(ProcessId,(PVOID)(uCurAddress), &bDef, sizeof(bDef), 0);
+		ReadWrite::MyReadMem(ProcessId,(PVOID)(uCurAddress), &bDef, sizeof(bDef), 0);
 		switch (bDef)
 		{
 		case 0xff: {//FF 25调用
 			ULONG_PTR uTemp;
-			ReadWrite::MyWriteMem(ProcessId, (PVOID)(uCurAddress + 6), &uTemp, sizeof(uTemp), 0);
+			ReadWrite::MyReadMem(ProcessId, (PVOID)(uCurAddress + 6), &uTemp, sizeof(uTemp), 0);
 			uCurAddress = uTemp;
+			KdPrint(("现在uCurrent=0x%p\r\n", uCurAddress));
 			break;
 		}
 		case 0xe9: {//E9 四字节偏移调用
 			int offset;
-			ReadWrite::MyWriteMem(ProcessId, (PVOID)(uCurAddress + 1), &offset, sizeof(int), 0);
+			ReadWrite::MyReadMem(ProcessId, (PVOID)(uCurAddress + 1), &offset, sizeof(int), 0);
 			uCurAddress += 5 + offset;
+			KdPrint(("现在uCurrent=0x%p\r\n", uCurAddress));
 			break;
 		}
 		default:
@@ -562,6 +564,11 @@ ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId,char* OriBytes) {
 	}
 
 
+	ULONG_PTR uSavedCurAddress = uCurAddress;
+
+
+
+	DbgPrintEx(77, 0, "[ACE Hook的地方]:0x%p\r\n", uCurAddress);
 
 	//if (uCurAddress == uLdrInitializeThunk) {
 
@@ -602,22 +609,11 @@ ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId,char* OriBytes) {
 	};
 
 	//获取那三个Call
-	ULONG_PTR uFirstCall = 0;
 	ULONG_PTR uSecondCall = uZwContinue;
 	ULONG_PTR uThirdCall = uRtlRaiseStatus;
 
-	for (ULONG_PTR uCur = uLdrInitializeThunk;; uCur++) {
-		if (*(PUCHAR)uCur == 0xE8) {
-			//找到了
-			int offset = *(int*)(uCur + 1);
-			uFirstCall = uCur + 5 + offset;
-			break;
-		}
-
-	}
 
 
-	KdPrint(("[OxygenDriver]info:LdrInitializeThunk三个Call的地址:0x%p,0x%p,0x%p\n", uFirstCall, uSecondCall, uThirdCall));
 
 
 	KdPrint(("[OxygenDriver]info:进程传过来的Call:0x%p\r\n", Global::GetInstance()->uLdrFirstCall));
@@ -641,7 +637,7 @@ ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId,char* OriBytes) {
 
 	//修改原型PTE修改属性 规避BE检查
 
-	PageAttrHide::ChangeVadAttributes((ULONG_PTR)pAllocAddr, MM_READONLY, ProcessId);
+	//PageAttrHide::ChangeVadAttributes((ULONG_PTR)pAllocAddr, MM_READONLY, ProcessId);
 
 	//填充RIP返回地址
 
@@ -675,8 +671,7 @@ ULONG_PTR  BanACELdrInitializeThunkHook(HANDLE ProcessId,char* OriBytes) {
 
 
 	//修改ACE Hook的地方
-	ULONG_PTR uSavedCurAddress = uCurAddress;
-
+	
 
 	KdPrint(("[OxygenDriver]:SavedCurAddress==0x%p\r\n", uSavedCurAddress));
 

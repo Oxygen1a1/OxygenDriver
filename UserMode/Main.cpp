@@ -58,6 +58,7 @@ int main() {
 				//addr
 				Init.uLdrFirstCall = (ULONG_PTR)(uIndex + 5 + offset);
 
+				break;
 			}
 
 

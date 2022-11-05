@@ -212,7 +212,7 @@ NTSTATUS DispatchFuncDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 
 
 		//Dll×¢Èë²âÊÔ
-		Injector_x64::MmInjector_x64_BypassAce((HANDLE)8808, L"\\??\\C:\\Users\\Administrator\\Desktop\\InjectorTest.dll");
+		Injector_x64::MmInjector_x64_BypassProtect((HANDLE)6400, L"\\??\\C:\\Users\\Administrator\\Desktop\\InjectorTest.dll",true);
 
 		Irp->IoStatus.Status = STATUS_SUCCESS;
 		Irp->IoStatus.Information = sizeof(InitPdb);
