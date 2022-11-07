@@ -16,17 +16,18 @@ struct InitPdb
 	ULONG_PTR uUserApcPendingAll;
 	ULONG_PTR uRvaMmpfndatabase;
 	ULONG_PTR uOriginPte;
-
 	ULONG_PTR fLdrInitializeThunk = 0;
 	ULONG_PTR fZwContinue = 0;
 	ULONG_PTR fRtlRaiseStatus = 0;
-
 	//Shellcode 加载DLl
-	ULONG_PTR pLoadLibraryA=0;
-	ULONG_PTR pGetProcAddress=0;
+	ULONG_PTR pLoadLibraryA = 0;
+	ULONG_PTR pGetProcAddress = 0;
 	//x64专属
-	ULONG_PTR pRtlAddFunctionTable=0;
+	ULONG_PTR pRtlAddFunctionTable = 0;
+
+	//因为是在对方Hook里面 所以把LdrInitializeThunk的第一个Call地址传一下
 	ULONG_PTR uLdrFirstCall = 0;
+	ULONG_PTR pKeServiceDescriptorTable = 0;
 
 };
 

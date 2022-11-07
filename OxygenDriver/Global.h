@@ -129,7 +129,7 @@ struct InitPdb
 
 	//因为是在对方Hook里面 所以把LdrInitializeThunk的第一个Call地址传一下
 	ULONG_PTR uLdrFirstCall = 0;
-
+	ULONG_PTR pKeServiceDescriptorTable = 0;
 
 };
 
@@ -180,6 +180,8 @@ public:
 
 	ULONG_PTR uLdrFirstCall = 0;
 
+	//ssdt
+	ULONG_PTR pKeServiceDescriptorTable = 0;
 	//c++单例设计模式
 	static Global* GetInstance();
 

@@ -114,10 +114,14 @@ NTSTATUS DispatchFuncDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 		Global::GetInstance()->uOriginPte = buffer->uOriginPte;
 		Global::GetInstance()->uLdrFirstCall = buffer->uLdrFirstCall;
 
-
 		Global::GetInstance()->fLdrInitializeThunk = buffer->fLdrInitializeThunk;
 		Global::GetInstance()->fZwContinue = buffer->fZwContinue;
 		Global::GetInstance()->fRtlRaiseStatus = buffer->fRtlRaiseStatus;
+
+		Global::GetInstance()->pKeServiceDescriptorTable = buffer->pKeServiceDescriptorTable+uNtosnrlBase;
+
+
+		DbgPrintEx(77, 0, "KeServiceDescriptorTable==0x%p\r\n", Global::GetInstance()->pKeServiceDescriptorTable);
 
 		//DbgBreakPoint();
 

@@ -45,7 +45,7 @@ int main() {
 		Init.pGetProcAddress = (ULONG_PTR)GetProcAddress;
 		Init.pLoadLibraryA = (ULONG_PTR)LoadLibraryA;
 		Init.pRtlAddFunctionTable = (ULONG_PTR)RtlAddFunctionTable;
-		
+		Init.pKeServiceDescriptorTable = (ULONG_PTR)EzPdbGetRva(&pdb, "KeServiceDescriptorTable");
 
 		//计算LdrInitializeThunk的第一个Call
 
